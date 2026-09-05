@@ -350,6 +350,86 @@ test("Miniflare: setOptions: can update host/port", async ({ expect }) => {
 	expect(state1.url.port).not.toBe(state3.url.port);
 });
 
+test("Miniflare: loopback server keeps idle keep-alive connections open", async ({
+	expect,
+}) => {
+	// Regression test for https://github.com/cloudflare/workers-sdk/issues/14848:
+	// workerd pools and reuses connections to the loopback server, and Node's
+	// default `keepAliveTimeout` (5s) closed idle pooled sockets, racing with
+	// workerd reusing them and failing requests with "Network connection lost".
+
+	// The loopback server isn't exposed publicly, so capture it as it's created
+	const createServer = http.createServer;
+	const servers: http.Server[] = [];
+	vi.spyOn(http, "createServer").mockImplementation(
+		(...args: Parameters<typeof http.createServer>) => {
+			const server = createServer(...args);
+			servers.push(server);
+			return server;
+		}
+	);
+
+	const mf = new Miniflare({
+		workers: [
+			{
+				config: {
+					type: "worker",
+					name: "",
+					compatibilityDate: "2025-05-01",
+					manifest: singleModuleManifest(""),
+				},
+			},
+		],
+	});
+	useDispose(mf);
+	await mf.ready;
+	expect(servers).toHaveLength(1);
+	const loopbackAddress = servers[0].address();
+	assert(loopbackAddress !== null && typeof loopbackAddress === "object");
+
+	const socket = net.connect(loopbackAddress.port, "127.0.0.1");
+	await once(socket, "connect");
+
+	// The loopback server responds 404 to unknown paths, which is enough to
+	// exercise keep-alive connection reuse
+	function sendRequest(): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const onData = (chunk: Buffer) => {
+				cleanup();
+				resolve(chunk.toString("utf8").split("\r\n")[0]);
+			};
+			const onCloseOrError = (errorOrHadError?: unknown) => {
+				cleanup();
+				reject(
+					errorOrHadError instanceof Error
+						? errorOrHadError
+						: new Error("Socket closed before response received")
+				);
+			};
+			function cleanup() {
+				socket.off("data", onData);
+				socket.off("close", onCloseOrError);
+				socket.off("error", onCloseOrError);
+			}
+			socket.on("data", onData);
+			socket.on("close", onCloseOrError);
+			socket.on("error", onCloseOrError);
+			socket.write(
+				"GET /unknown HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n"
+			);
+		});
+	}
+
+	expect(await sendRequest()).toBe("HTTP/1.1 404 Not Found");
+
+	// Node's default `keepAliveTimeout` is 5 seconds, so without the fix this
+	// deterministically closes the idle socket after ~5 seconds and the second
+	// request fails
+	await new Promise((resolve) => setTimeout(resolve, 6000));
+	expect(await sendRequest()).toBe("HTTP/1.1 404 Not Found");
+	socket.destroy();
+});
+
 const interfaces = os.networkInterfaces();
 const localInterface = (interfaces["en0"] ?? interfaces["eth0"])?.find(
 	({ family }) => family === "IPv4"
