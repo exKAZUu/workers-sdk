@@ -1,5 +1,20 @@
 # @cloudflare/runtime-types
 
+## 0.1.35
+
+### Patch Changes
+
+- [#17140](https://github.com/cloudflare/workers-sdk/pull/17140) [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `DEFAULT_COMPAT_DATE` to 2026-11-24
+
+  Use the bundled workerd release's compatibility date by default when scaffolding new projects or when no compatibility date is configured.
+
+- [#17160](https://github.com/cloudflare/workers-sdk/pull/17160) [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `DEFAULT_COMPAT_DATE` to 2026-11-25
+
+  Use the bundled workerd release's compatibility date by default when scaffolding new projects or when no compatibility date is configured.
+
+- Updated dependencies [[`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497), [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f), [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497), [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f), [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497), [`927f070`](https://github.com/cloudflare/workers-sdk/commit/927f070ee0589a2567a76f2000dcff60b1b3d2eb), [`e46c7c6`](https://github.com/cloudflare/workers-sdk/commit/e46c7c6a4c9c797f5d8f40827c9f2e4ef8e3fd6c)]:
+  - miniflare@5.20261125.0-beta
+
 ## 0.1.34
 
 ### Patch Changes

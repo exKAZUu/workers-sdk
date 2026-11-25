@@ -1,5 +1,46 @@
 # @cloudflare/vitest-plugin
 
+## 1.10.0
+
+### Minor Changes
+
+- [#17161](https://github.com/cloudflare/workers-sdk/pull/17161) [`e46c7c6`](https://github.com/cloudflare/workers-sdk/commit/e46c7c6a4c9c797f5d8f40827c9f2e4ef8e3fd6c) Thanks [@thisisamank](https://github.com/thisisamank)! - Add RealtimeKit bindings
+
+  Bind an existing RealtimeKit app to a Worker in your Wrangler configuration file:
+
+  ```jsonc
+  {
+    "realtimekit": [
+      {
+        "binding": "RTK",
+        "app_id": "<APP_ID>",
+        "remote": true
+      }
+    ]
+  }
+  ```
+
+  RealtimeKit has no local simulator, so set `remote: true` to use the real app during local development. Calls during development, including calls on returned meetings, go through the existing remote bindings proxy. The experimental configuration API supports `bindings.realtimeKit({ id: "<APP_ID>", dev: { remote: true } })`, and the `wrangler-to-cf` codemod converts `realtimekit` entries. Deployments upload only the binding name and `app_id`. `wrangler types` generates `RealtimeKitBinding` for these bindings.
+
+### Patch Changes
+
+- [#17140](https://github.com/cloudflare/workers-sdk/pull/17140) [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `DEFAULT_COMPAT_DATE` to 2026-11-24
+
+  Use the bundled workerd release's compatibility date by default when scaffolding new projects or when no compatibility date is configured.
+
+- [#17160](https://github.com/cloudflare/workers-sdk/pull/17160) [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `DEFAULT_COMPAT_DATE` to 2026-11-25
+
+  Use the bundled workerd release's compatibility date by default when scaffolding new projects or when no compatibility date is configured.
+
+- [#17045](https://github.com/cloudflare/workers-sdk/pull/17045) [`2009e6c`](https://github.com/cloudflare/workers-sdk/commit/2009e6c6dbe7b953432680b7bc7880e50db2331a) Thanks [@petebacondarwin](https://github.com/petebacondarwin)! - Defer remote-only binding login until the binding is called
+
+  When a project's only remote resources are bindings without a local simulator, such as Workers AI or Vectorize, local development now starts without logging in. The first binding call establishes the remote connection and starts login if needed. Calls wait for login and continue once it succeeds, while unrelated requests keep working. Failed login attempts fail the waiting calls without stopping the development server. Background refresh does not start login for an unused binding.
+
+  This applies to Wrangler, the Cloudflare Vite plugin, and the Vitest plugin. Explicitly remote bindings with local simulators, such as KV or D1 with `remote: true`, still require authentication during startup.
+
+- Updated dependencies [[`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497), [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f), [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497), [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f), [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497), [`927f070`](https://github.com/cloudflare/workers-sdk/commit/927f070ee0589a2567a76f2000dcff60b1b3d2eb), [`e46c7c6`](https://github.com/cloudflare/workers-sdk/commit/e46c7c6a4c9c797f5d8f40827c9f2e4ef8e3fd6c)]:
+  - miniflare@5.20261125.0-beta
+
 ## 1.9.2
 
 ### Patch Changes

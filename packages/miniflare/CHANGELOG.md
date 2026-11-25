@@ -1,5 +1,63 @@
 # miniflare
 
+## 5.20261125.0-beta
+
+### Minor Changes
+
+- [#17161](https://github.com/cloudflare/workers-sdk/pull/17161) [`e46c7c6`](https://github.com/cloudflare/workers-sdk/commit/e46c7c6a4c9c797f5d8f40827c9f2e4ef8e3fd6c) Thanks [@thisisamank](https://github.com/thisisamank)! - Add RealtimeKit bindings
+
+  Bind an existing RealtimeKit app to a Worker in your Wrangler configuration file:
+
+  ```jsonc
+  {
+    "realtimekit": [
+      {
+        "binding": "RTK",
+        "app_id": "<APP_ID>",
+        "remote": true
+      }
+    ]
+  }
+  ```
+
+  RealtimeKit has no local simulator, so set `remote: true` to use the real app during local development. Calls during development, including calls on returned meetings, go through the existing remote bindings proxy. The experimental configuration API supports `bindings.realtimeKit({ id: "<APP_ID>", dev: { remote: true } })`, and the `wrangler-to-cf` codemod converts `realtimekit` entries. Deployments upload only the binding name and `app_id`. `wrangler types` generates `RealtimeKitBinding` for these bindings.
+
+### Patch Changes
+
+- [#17140](https://github.com/cloudflare/workers-sdk/pull/17140) [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `DEFAULT_COMPAT_DATE` to 2026-11-24
+
+  Use the bundled workerd release's compatibility date by default when scaffolding new projects or when no compatibility date is configured.
+
+- [#17160](https://github.com/cloudflare/workers-sdk/pull/17160) [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `DEFAULT_COMPAT_DATE` to 2026-11-25
+
+  Use the bundled workerd release's compatibility date by default when scaffolding new projects or when no compatibility date is configured.
+
+- [#17140](https://github.com/cloudflare/workers-sdk/pull/17140) [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update dependencies of "miniflare", "wrangler"
+
+  The following dependency versions have been updated:
+
+  | Dependency                | From          | To            |
+  | ------------------------- | ------------- | ------------- |
+  | @cloudflare/workers-types | ^5.20261123.1 | ^5.20261124.1 |
+  | workerd                   | 1.20261123.1  | 1.20261124.1  |
+
+- [#17160](https://github.com/cloudflare/workers-sdk/pull/17160) [`8d3e953`](https://github.com/cloudflare/workers-sdk/commit/8d3e9538d67c46cab48201c97e2fcdff7edf451f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update dependencies of "miniflare", "wrangler"
+
+  The following dependency versions have been updated:
+
+  | Dependency                | From          | To            |
+  | ------------------------- | ------------- | ------------- |
+  | @cloudflare/workers-types | ^5.20261124.1 | ^5.20261125.1 |
+  | workerd                   | 1.20261124.1  | 1.20261125.1  |
+
+- [#17140](https://github.com/cloudflare/workers-sdk/pull/17140) [`b645124`](https://github.com/cloudflare/workers-sdk/commit/b6451243417e541f61f239c6275b20c59927b497) Thanks [@dependabot](https://github.com/apps/dependabot)! - Expose `EmailMessage.raw` in local development
+
+  Miniflare now matches the Workers API by exposing the message body as a readable byte stream. This works whether you construct the message from a string or an existing stream.
+
+- [#17166](https://github.com/cloudflare/workers-sdk/pull/17166) [`927f070`](https://github.com/cloudflare/workers-sdk/commit/927f070ee0589a2567a76f2000dcff60b1b3d2eb) Thanks [@edmundhung](https://github.com/edmundhung)! - Let `resolveLocalBindings()` accept an undefined `mode`
+
+  When `mode` is `undefined`, the warning about secrets that have no local value names only `.dev.vars`, `.env.local`, and `.env`.
+
 ## 5.20261123.1-beta
 
 ### Minor Changes
