@@ -1,10 +1,8 @@
 import { resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { checkMacOSVersion, setLogLevel } from "@cloudflare/cli-shared-helpers";
-import {
-	CommandLineArgsError,
-	experimental_readRawConfig,
-} from "@cloudflare/workers-utils";
+import { CommandLineArgsError } from "@cloudflare/workers-utils";
+import { experimental_readRawConfig } from "@cloudflare/workers-utils/config";
 import chalk from "chalk";
 import { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";
 import makeCLI from "yargs";
@@ -113,7 +111,6 @@ import {
 	cloudchamberSshNamespace,
 } from "./cloudchamber";
 import { completionsCommand } from "./complete";
-import { getDefaultEnvFiles, loadDotEnv } from "./config/dot-env";
 import {
 	containersBuildCommand,
 	containersDeleteCommand,
@@ -155,13 +152,13 @@ import { d1TimeTravelRestoreCommand } from "./d1/timeTravel/restore";
 import { deleteCommand } from "./delete";
 import { deployCommand } from "./deploy";
 import { dev } from "./dev";
+import { getDefaultEnvFiles, loadDotEnv } from "./dev/dev-vars";
 import {
 	dispatchNamespaceCreateCommand,
 	dispatchNamespaceDeleteCommand,
 	dispatchNamespaceGetCommand,
 	dispatchNamespaceListCommand,
 	dispatchNamespaceNamespace,
-	dispatchNamespaceRenameCommand,
 } from "./dispatch-namespace";
 import { docs } from "./docs";
 import { emailRoutingAddressesCreateCommand } from "./email-routing/addresses/create";
@@ -705,6 +702,7 @@ export function createCLIParser(argv: string[]) {
 				args["env-file"] ?? getDefaultEnvFiles(args.env)
 			).map((p) => resolve(p));
 			process.env = loadDotEnv(resolvedEnvFilePaths, {
+				logger,
 				includeProcessEnv: true,
 				silent: true,
 			});
@@ -2247,10 +2245,6 @@ export function createCLIParser(argv: string[]) {
 		{
 			command: "wrangler dispatch-namespace delete",
 			definition: dispatchNamespaceDeleteCommand,
-		},
-		{
-			command: "wrangler dispatch-namespace rename",
-			definition: dispatchNamespaceRenameCommand,
 		},
 	]);
 	registry.registerNamespace("dispatch-namespace");

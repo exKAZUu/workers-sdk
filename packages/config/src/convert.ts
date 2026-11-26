@@ -1,16 +1,17 @@
+import { UserError } from "@cloudflare/workers-utils";
+import { toApiComplianceRegion } from "@cloudflare/workers-utils/compliance";
 import {
-	UserError,
 	type RawConfig,
 	type ContainerApp,
 	type DurableObjectContainerImage,
 	type Exports,
-} from "@cloudflare/workers-utils";
+} from "@cloudflare/workers-utils/config";
 import { isParsedUnsafeBinding } from "./schema";
 import type {
-	ParsedInputConfig,
-	ParsedInputContainerConfig,
-	ParsedInputSettingsConfig,
-	ParsedInputWorkerConfig,
+	ParsedCloudflareConfig,
+	ParsedContainerConfig,
+	ParsedSettings,
+	ParsedWorkerConfig,
 } from "./schema";
 import type { Json } from "./utils";
 
@@ -29,9 +30,11 @@ const ROLLOUT_KIND_MAP = {
  * @param config The parsed configuration.
  * @returns The corresponding Wrangler `RawConfig`.
  */
-export function convertToWranglerConfig(config: ParsedInputConfig): RawConfig {
+export function convertToWranglerConfig(
+	config: ParsedCloudflareConfig
+): RawConfig {
 	const result: RawConfig = {};
-	const { worker, containers } = config;
+	const { worker, containers = [] } = config;
 
 	if (worker !== undefined) {
 		convertTopLevel(worker, result);
@@ -52,7 +55,7 @@ export function convertToWranglerConfig(config: ParsedInputConfig): RawConfig {
 	return result;
 }
 
-function convertContainer(container: ParsedInputContainerConfig): ContainerApp {
+function convertContainer(container: ParsedContainerConfig): ContainerApp {
 	const converted: ContainerApp = {
 		name: container.name,
 	};
@@ -90,7 +93,9 @@ function convertContainer(container: ParsedInputContainerConfig): ContainerApp {
 		"dockerfile" in container.image
 			? container.image.dockerfile
 			: container.image.reference;
-	converted.max_instances = container.maxInstances;
+	if (container.maxInstances !== undefined) {
+		converted.max_instances = container.maxInstances;
+	}
 	if ("dockerfile" in container.image) {
 		if (container.image.buildContext !== undefined) {
 			converted.image_build_context = container.image.buildContext;
@@ -143,7 +148,7 @@ function convertContainer(container: ParsedInputContainerConfig): ContainerApp {
 
 type DurableObjectInputImage = NonNullable<
 	Extract<
-		ParsedInputContainerConfig,
+		ParsedContainerConfig,
 		{ schedulingPolicy: "durable-object" }
 	>["images"]
 >[string];
@@ -168,7 +173,7 @@ function convertDurableObjectContainerImage(
 }
 
 function convertContainerObservability(
-	observability: NonNullable<ParsedInputContainerConfig["observability"]>
+	observability: NonNullable<ParsedContainerConfig["observability"]>
 ): NonNullable<ContainerApp["observability"]> {
 	const converted: NonNullable<ContainerApp["observability"]> = {};
 	if (observability.enabled !== undefined) {
@@ -197,16 +202,12 @@ function convertContainerObservability(
  * Merge a parsed settings config's fields (`account_id`, `compliance_region`)
  * onto an existing Wrangler `RawConfig`.
  */
-function convertSettings(
-	settings: ParsedInputSettingsConfig,
-	result: RawConfig
-): void {
+function convertSettings(settings: ParsedSettings, result: RawConfig): void {
 	if (settings.accountId !== undefined) {
 		result.account_id = settings.accountId;
 	}
 	if (settings.complianceRegion !== undefined) {
-		result.compliance_region =
-			settings.complianceRegion === "fedramp-high" ? "fedramp_high" : "public";
+		result.compliance_region = toApiComplianceRegion(settings.complianceRegion);
 	}
 }
 
@@ -214,10 +215,7 @@ function convertSettings(
 // TOP-LEVEL FIELDS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function convertTopLevel(
-	config: ParsedInputWorkerConfig,
-	result: RawConfig
-): void {
+function convertTopLevel(config: ParsedWorkerConfig, result: RawConfig): void {
 	if (config.name !== undefined) {
 		result.name = config.name;
 	}
@@ -239,8 +237,8 @@ function convertTopLevel(
 	if (config.logpush !== undefined) {
 		result.logpush = config.logpush;
 	}
-	if (config.firstPartyWorker !== undefined) {
-		result.first_party_worker = config.firstPartyWorker;
+	if (config.experimental?.firstPartyWorker !== undefined) {
+		result.first_party_worker = config.experimental.firstPartyWorker;
 	}
 	if (config.placement !== undefined) {
 		// `placement` shapes match 1:1 between the two configs.
@@ -262,6 +260,16 @@ function convertTopLevel(
 	if (config.access !== undefined) {
 		result.access = config.access;
 	}
+	if (config.images?.urlTransformations !== undefined) {
+		const { enabled, allowedOrigins } = config.images.urlTransformations;
+		result.images = {
+			...result.images,
+			url_transformations: omitUndefined({
+				enabled,
+				allowed_origins: allowedOrigins,
+			}),
+		};
+	}
 	if (config.cache !== undefined) {
 		type RawCacheConfig = NonNullable<RawConfig["cache"]>;
 		const cache: RawCacheConfig = {
@@ -278,7 +286,7 @@ function convertTopLevel(
 }
 
 function convertObservability(
-	observability: NonNullable<ParsedInputWorkerConfig["observability"]>
+	observability: NonNullable<ParsedWorkerConfig["observability"]>
 ): NonNullable<RawConfig["observability"]> {
 	const out: NonNullable<RawConfig["observability"]> = {};
 	if (observability.enabled !== undefined) {
@@ -337,7 +345,7 @@ function convertObservability(
 }
 
 function convertUnsafeTopLevel(
-	unsafe: NonNullable<ParsedInputWorkerConfig["unsafe"]>
+	unsafe: NonNullable<ParsedWorkerConfig["unsafe"]>
 ): NonNullable<RawConfig["unsafe"]> {
 	const out: NonNullable<RawConfig["unsafe"]> = {};
 	if (unsafe.metadata !== undefined) {
@@ -361,7 +369,7 @@ function convertUnsafeTopLevel(
 // ═══════════════════════════════════════════════════════════════════════════
 
 function convertBindingsAndAssets(
-	config: ParsedInputWorkerConfig,
+	config: ParsedWorkerConfig,
 	result: RawConfig
 ): void {
 	let assetsBindingName: string | undefined;
@@ -489,7 +497,7 @@ function convertBindingsAndAssets(
 				});
 				break;
 			}
-			case "analytics": {
+			case "analytics-sql": {
 				result.analytics = omitUndefined({
 					binding: name,
 					remote: binding.dev?.remote,
@@ -502,6 +510,7 @@ function convertBindingsAndAssets(
 						binding: name,
 						database_id: binding.id,
 						database_name: binding.name,
+						jurisdiction: binding.jurisdiction,
 						remote: binding.dev?.remote,
 					})
 				);
@@ -555,6 +564,7 @@ function convertBindingsAndAssets(
 			}
 			case "images": {
 				result.images = omitUndefined({
+					...result.images,
 					binding: name,
 					remote: binding.dev?.remote,
 				});
@@ -599,7 +609,7 @@ function convertBindingsAndAssets(
 				pipelines.push(
 					omitUndefined({
 						binding: name,
-						stream: binding.name,
+						stream: binding.streamId,
 						remote: binding.dev?.remote,
 					})
 				);
@@ -609,7 +619,7 @@ function convertBindingsAndAssets(
 				k2.push(
 					omitUndefined({
 						binding: name,
-						stream: binding.stream,
+						stream: binding.id,
 						remote: binding.dev?.remote,
 					})
 				);
@@ -878,10 +888,7 @@ function convertBindingsAndAssets(
 // EXPORTS (Workers + Durable Objects)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function convertExports(
-	config: ParsedInputWorkerConfig,
-	result: RawConfig
-): void {
+function convertExports(config: ParsedWorkerConfig, result: RawConfig): void {
 	const exports = config.exports;
 	if (!exports) {
 		return;
@@ -895,7 +902,25 @@ function convertExports(
 			continue;
 		}
 		if (value.type === "workflow") {
-			const { defaultRetention, ...workflow } = value;
+			const { defaultRetention, events, ...workflow } = value;
+			if (events?.length) {
+				result.triggers ??= {};
+				result.triggers.events ??= [];
+				result.triggers.events.push(
+					...events.map((event) => ({
+						type: event.type,
+						...(event.filter === undefined
+							? {}
+							: {
+									filter: omitUndefined({
+										namespace: event.filter.namespace,
+										repo_name: event.filter.repoName,
+									}),
+								}),
+						targets: [{ type: "workflow" as const, workflow_name: value.name }],
+					}))
+				);
+			}
 			converted[exportName] = {
 				...workflow,
 				...(defaultRetention !== undefined && {
@@ -984,10 +1009,7 @@ function convertExports(
 // TRIGGERS (scheduled + fetch + queue consumer + email + connect)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function convertTriggers(
-	config: ParsedInputWorkerConfig,
-	result: RawConfig
-): void {
+function convertTriggers(config: ParsedWorkerConfig, result: RawConfig): void {
 	const triggers = config.triggers;
 	if (!triggers || triggers.length === 0) {
 		return;
@@ -1061,7 +1083,7 @@ function convertTriggers(
 	}
 
 	if (crons.length) {
-		result.triggers = { crons };
+		result.triggers = { ...result.triggers, crons };
 	}
 	if (routes.length) {
 		result.routes = routes;
@@ -1082,10 +1104,7 @@ function convertTriggers(
 // DOMAINS (top-level domains -> custom-domain routes)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function convertDomains(
-	config: ParsedInputWorkerConfig,
-	result: RawConfig
-): void {
+function convertDomains(config: ParsedWorkerConfig, result: RawConfig): void {
 	if (!config.domains || config.domains.length === 0) {
 		return;
 	}
@@ -1112,27 +1131,21 @@ function convertDomains(
 // ═══════════════════════════════════════════════════════════════════════════
 
 function convertTailConsumers(
-	config: ParsedInputWorkerConfig,
+	config: ParsedWorkerConfig,
 	result: RawConfig
 ): void {
-	const consumers = config.tailConsumers;
-	if (!consumers || consumers.length === 0) {
-		return;
+	const tailConsumers = config.tailConsumers ?? [];
+	if (tailConsumers.length > 0) {
+		result.tail_consumers = tailConsumers.map((consumer) => ({
+			service: consumer.worker,
+		}));
 	}
-	const tail: NonNullable<RawConfig["tail_consumers"]> = [];
-	const streaming: NonNullable<RawConfig["streaming_tail_consumers"]> = [];
-	for (const consumer of consumers) {
-		if (consumer.streaming) {
-			streaming.push({ service: consumer.worker });
-		} else {
-			tail.push({ service: consumer.worker });
-		}
-	}
-	if (tail.length) {
-		result.tail_consumers = tail;
-	}
-	if (streaming.length) {
-		result.streaming_tail_consumers = streaming;
+	const streamingTailConsumers =
+		config.experimental?.streamingTailConsumers ?? [];
+	if (streamingTailConsumers.length > 0) {
+		result.streaming_tail_consumers = streamingTailConsumers.map(
+			(consumer) => ({ service: consumer.worker })
+		);
 	}
 }
 

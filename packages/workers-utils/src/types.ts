@@ -1,6 +1,7 @@
 import type { ApiCredentials } from "./cfetch";
 import type { Config } from "./config";
 import type {
+	ArtifactsEventTrigger,
 	CustomDomainRoute,
 	ContainerApp,
 	ContainerEngine,
@@ -58,7 +59,10 @@ import type {
 	CfScriptFormat,
 	CfUnsafe,
 } from "./worker";
-import type { AssetConfig, RouterConfig } from "@cloudflare/workers-shared";
+import type {
+	AssetConfig,
+	RouterConfig,
+} from "@cloudflare/workers-shared/utils/types";
 import type { MockAgent } from "undici";
 
 export type Json =
@@ -392,10 +396,10 @@ export type ServiceMetadataRes = {
 		environment: string;
 		created_on: string;
 		modified_on: string;
-		script: {
+		script?: {
 			id: string;
 			tag: string;
-			tags: string[];
+			tags: string[] | null;
 			etag: string;
 			handlers: string[];
 			modified_on: string;
@@ -412,7 +416,7 @@ export type ServiceMetadataRes = {
 			placement_mode?: "smart";
 			tail_consumers?: TailConsumer[];
 			observability?: Observability;
-		};
+		} | null;
 	};
 	created_on: string;
 	modified_on: string;
@@ -458,7 +462,8 @@ export type Trigger =
 	| ({ type: "route" } & CustomDomainRoute)
 	| { type: "cron"; cron: string }
 	| ({ type: "queue-consumer" } & Omit<QueueConsumer, "type">)
-	| ({ type: "connect" } & ConnectHandler);
+	| ({ type: "connect" } & ConnectHandler)
+	| { type: "artifacts-event"; event: ArtifactsEventTrigger };
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
 	? Omit<T, K>

@@ -1,15 +1,16 @@
+import type { RemoteBindingsCliDisplayName } from "../utils/remote";
 import type {
 	AsyncHook,
 	CfAccount,
 	CfModule,
 	CfModuleType,
-	Config,
 	StartDevWorkerInput,
 } from "@cloudflare/workers-utils";
+import type { Config } from "@cloudflare/workers-utils/config";
 
 export type StartDevWorkerOptions = {
 	name: string;
-	cliDisplayName: string;
+	cliDisplayName: RemoteBindingsCliDisplayName;
 	entrypointSource: string;
 	bindings: NonNullable<StartDevWorkerInput["bindings"]>;
 	compatibilityDate: StartDevWorkerInput["compatibilityDate"];

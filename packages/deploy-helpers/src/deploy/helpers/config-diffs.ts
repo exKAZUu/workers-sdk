@@ -11,7 +11,7 @@ import type {
 	ConfigBindingFieldName,
 	RawConfig,
 	Route,
-} from "@cloudflare/workers-utils";
+} from "@cloudflare/workers-utils/config";
 
 // Exhaustive map of all binding keys in CfWorkerInit["bindings"].
 // When a new binding type is added, TypeScript will error here until it is handled.
@@ -352,6 +352,15 @@ function removeRemoteConfigFieldFromBindings(normalizedConfig: Config): void {
 			"remote" in normalizedConfig[singleBindingField]
 		) {
 			delete normalizedConfig[singleBindingField].remote;
+		}
+	}
+
+	// `url_transformations` isn't part of the deployed Worker's settings, so it
+	// would always appear as a local-only difference
+	if (normalizedConfig.images) {
+		delete normalizedConfig.images.url_transformations;
+		if (normalizedConfig.images.binding === undefined) {
+			delete normalizedConfig.images;
 		}
 	}
 }

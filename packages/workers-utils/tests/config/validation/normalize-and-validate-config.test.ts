@@ -839,6 +839,31 @@ describe("normalizeAndValidateConfig()", () => {
 				`);
 		});
 
+		it.for(["namespace", "repo_name"])(
+			"rejects an empty Artifacts %s filter",
+			(field, { expect }) => {
+				const { diagnostics } = normalizeAndValidateConfig(
+					{
+						triggers: {
+							events: [
+								{
+									type: "cf.artifacts.repo.created",
+									filter: { [field]: "" },
+									targets: [{ type: "workflow", workflow_name: "on-repo" }],
+								},
+							],
+						},
+					},
+					"wrangler.json",
+					"wrangler.json",
+					{ env: undefined }
+				);
+				expect(diagnostics.renderErrors()).toContain(
+					'Expected "triggers.events[0].filter" to contain only non-empty string'
+				);
+			}
+		);
+
 		it("should accept Artifacts event triggers", ({ expect }) => {
 			const expectedConfig: RawConfig = {
 				triggers: {
@@ -4635,6 +4660,183 @@ describe("normalizeAndValidateConfig()", () => {
 					  - The field "images" should be an object but got null."
 				`);
 			});
+
+			it("should accept url_transformations without a binding", ({
+				expect,
+			}) => {
+				const { config, diagnostics } = normalizeAndValidateConfig(
+					{
+						images: {
+							url_transformations: {
+								enabled: true,
+								allowed_origins: ["example.com"],
+							},
+						},
+					} as unknown as RawConfig,
+					undefined,
+					undefined,
+					{ env: undefined }
+				);
+
+				expect(diagnostics.hasErrors()).toBe(false);
+				expect(diagnostics.hasWarnings()).toBe(false);
+				expect(config.images).toEqual({
+					url_transformations: {
+						enabled: true,
+						allowed_origins: ["example.com"],
+					},
+				});
+			});
+
+			describe("named environments", () => {
+				const normalize = (envImages: unknown) =>
+					normalizeAndValidateConfig(
+						{
+							images: {
+								binding: "IMAGES",
+								url_transformations: { enabled: true },
+							},
+							env: {
+								staging: envImages === undefined ? {} : { images: envImages },
+							},
+						} as unknown as RawConfig,
+						undefined,
+						undefined,
+						{ env: "staging" }
+					);
+
+				it("should not inherit url_transformations", ({ expect }) => {
+					const { config, diagnostics } = normalize(undefined);
+
+					expect(config.images).toBeUndefined();
+					expect(diagnostics.renderWarnings()).toContain(
+						'"images" exists at the top level, but not on "env.staging".'
+					);
+				});
+
+				it("should warn if an environment's images block omits url_transformations", ({
+					expect,
+				}) => {
+					const { config, diagnostics } = normalize({ binding: "IMAGES" });
+
+					expect(config.images).toEqual({ binding: "IMAGES" });
+					expect(diagnostics.renderWarnings()).toMatchInlineSnapshot(`
+						"Processing wrangler configuration:
+
+						  - "env.staging" environment configuration
+						    - "images.url_transformations" exists at the top level, but not on "env.staging".
+						      This is not what you probably want, since "images.url_transformations" is not inherited by environments.
+						      Please add "images.url_transformations" to "env.staging"."
+					`);
+				});
+			});
+
+			it("should not treat url_transformations as a binding name", ({
+				expect,
+			}) => {
+				const { diagnostics } = normalizeAndValidateConfig(
+					{
+						vars: { url_transformations: "a", remote: "b" },
+						images: { remote: true, url_transformations: { enabled: true } },
+					} as unknown as RawConfig,
+					undefined,
+					undefined,
+					{ env: undefined }
+				);
+
+				expect(diagnostics.hasErrors()).toBe(false);
+			});
+
+			it("should error if neither binding nor url_transformations is set", ({
+				expect,
+			}) => {
+				const { diagnostics } = normalizeAndValidateConfig(
+					{ images: { remote: true } } as unknown as RawConfig,
+					undefined,
+					undefined,
+					{ env: undefined }
+				);
+
+				expect(diagnostics.renderErrors()).toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+					  - The field "images" should have a "binding" or "url_transformations" field."
+				`);
+			});
+
+			it("should error on invalid url_transformations", ({ expect }) => {
+				const { diagnostics } = normalizeAndValidateConfig(
+					{
+						images: {
+							binding: "IMAGES",
+							url_transformations: { allowed_origins: "example.com" },
+						},
+					} as unknown as RawConfig,
+					undefined,
+					undefined,
+					{ env: undefined }
+				);
+
+				expect(diagnostics.renderErrors()).toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+					  - "images.url_transformations.enabled" is a required field.
+					  - Expected "images.url_transformations.allowed_origins" to be an array of strings but got "example.com""
+				`);
+			});
+
+			it("should error on malformed allowed_origins", ({ expect }) => {
+				const errorsFor = (allowed_origins: unknown) =>
+					normalizeAndValidateConfig(
+						{
+							images: {
+								url_transformations: { enabled: true, allowed_origins },
+							},
+						} as unknown as RawConfig,
+						undefined,
+						undefined,
+						{ env: undefined }
+					).diagnostics.renderErrors();
+
+				expect(errorsFor([])).toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+					  - The field "images.url_transformations.allowed_origins" should not be empty. Omit it to only allow images from the Worker's own zone."
+				`);
+				expect(errorsFor(["https://cdn.example.com", "a,b.example.com", ""]))
+					.toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+					  - "images.url_transformations.allowed_origins[0]" should be a hostname without a protocol, e.g. "cdn.example.com" rather than "https://cdn.example.com".
+					  - "images.url_transformations.allowed_origins[1]" should not contain a comma, but got "a,b.example.com".
+					  - "images.url_transformations.allowed_origins[2]" should not be empty."
+				`);
+				expect(
+					errorsFor(Array.from({ length: 11 }, (_, i) => `${i}.example.com`))
+				).toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+					  - The field "images.url_transformations.allowed_origins" can contain at most 10 origins, but got 11."
+				`);
+			});
+
+			it("should error if allowed_origins mixes * with other origins", ({
+				expect,
+			}) => {
+				const { diagnostics } = normalizeAndValidateConfig(
+					{
+						images: {
+							url_transformations: {
+								enabled: true,
+								allowed_origins: ["*", "example.com"],
+							},
+						},
+					} as unknown as RawConfig,
+					undefined,
+					undefined,
+					{ env: undefined }
+				);
+
+				expect(diagnostics.renderErrors()).toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+					  - The field "images.url_transformations.allowed_origins" cannot contain "*" alongside other origins. Use ["*"] on its own to allow any origin."
+				`);
+			});
 		});
 
 		// Media
@@ -7183,12 +7385,12 @@ describe("normalizeAndValidateConfig()", () => {
 				`);
 			});
 
-			it("should allow the database_id field to be omitted (resource provisioning)", ({
+			it("should allow provisioning options without a database_id", ({
 				expect,
 			}) => {
 				const { diagnostics } = normalizeAndValidateConfig(
 					{
-						d1_databases: [{ binding: "VALID" }],
+						d1_databases: [{ binding: "VALID", jurisdiction: "eu" }],
 					} as unknown as RawConfig,
 					undefined,
 					undefined,
@@ -7197,6 +7399,31 @@ describe("normalizeAndValidateConfig()", () => {
 
 				expect(diagnostics.hasWarnings()).toBe(false);
 				expect(diagnostics.hasErrors()).toBe(false);
+			});
+
+			it("should error if D1 database jurisdiction has incorrect type", ({
+				expect,
+			}) => {
+				const { diagnostics } = normalizeAndValidateConfig(
+					{
+						d1_databases: [
+							{
+								binding: "DB",
+								jurisdiction: true,
+							},
+						],
+					} as unknown as RawConfig,
+					undefined,
+					undefined,
+					{ env: undefined }
+				);
+
+				expect(diagnostics.hasWarnings()).toBe(false);
+				expect(diagnostics.hasErrors()).toBe(true);
+				expect(diagnostics.renderErrors()).toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+					  - "d1_databases[0]" bindings should, optionally, have a string "jurisdiction" field but got {"binding":"DB","jurisdiction":true}."
+				`);
 			});
 
 			it("should error if D1 database database_name has incorrect type", ({
@@ -13446,6 +13673,77 @@ describe("normalizeAndValidateConfig()", () => {
 				expect(diagnostics.hasErrors()).toBe(false);
 			});
 
+			it.for([true, false, undefined])(
+				"should warn when invocation logs are enabled but logs are disabled, with observability.enabled=%s",
+				(enabled, { expect }) => {
+					const observability = {
+						enabled,
+						logs: { enabled: false, invocation_logs: true },
+					};
+					const { config, diagnostics } = normalizeAndValidateConfig(
+						{ observability },
+						undefined,
+						undefined,
+						{ env: undefined }
+					);
+
+					expect(diagnostics.hasErrors()).toBe(false);
+					expect(diagnostics.hasWarnings()).toBe(true);
+					expect(diagnostics.renderWarnings()).toMatchInlineSnapshot(`
+						"Processing wrangler configuration:
+						  - "observability.logs.invocation_logs" has no effect when "observability.logs.enabled" is false. Set "observability.logs.enabled" to true to enable invocation logs."
+					`);
+					expect(config.observability).toEqual(observability);
+				}
+			);
+
+			it("should warn about disabled invocation logs in a named environment", ({
+				expect,
+			}) => {
+				const observability = {
+					enabled: true,
+					logs: { enabled: false, invocation_logs: true },
+				};
+				const { config, diagnostics } = normalizeAndValidateConfig(
+					{ env: { staging: { observability } } },
+					undefined,
+					undefined,
+					{ env: "staging" }
+				);
+
+				expect(diagnostics.hasErrors()).toBe(false);
+				expect(diagnostics.hasWarnings()).toBe(true);
+				expect(diagnostics.renderWarnings()).toMatchInlineSnapshot(`
+					"Processing wrangler configuration:
+
+					  - "env.staging" environment configuration
+					    - "observability.logs.invocation_logs" has no effect when "observability.logs.enabled" is false. Set "observability.logs.enabled" to true to enable invocation logs."
+				`);
+				expect(config.observability).toEqual(observability);
+			});
+
+			it.for([
+				{ enabled: true, logs: { enabled: true, invocation_logs: true } },
+				{ enabled: false, logs: { enabled: true, invocation_logs: true } },
+				{ enabled: true, logs: { invocation_logs: true } },
+				{ enabled: true, logs: { enabled: false, invocation_logs: false } },
+				{ enabled: true, logs: { enabled: false } },
+			])(
+				"should not warn about invocation logs for observability=%j",
+				(observability, { expect }) => {
+					const { config, diagnostics } = normalizeAndValidateConfig(
+						{ observability },
+						undefined,
+						undefined,
+						{ env: undefined }
+					);
+
+					expect(diagnostics.hasErrors()).toBe(false);
+					expect(diagnostics.hasWarnings()).toBe(false);
+					expect(config.observability).toEqual(observability);
+				}
+			);
+
 			it("should error on invalid observability.logs", ({ expect }) => {
 				const { diagnostics } = normalizeAndValidateConfig(
 					{
@@ -14447,6 +14745,28 @@ describe("normalizeAndValidateConfig()", () => {
 				);
 				expect(diagnostics.renderWarnings()).toContain(
 					'Unexpected fields found in previews.durable_objects field: "code_update_strategy"'
+				);
+			});
+
+			it("should reject images.url_transformations in previews", ({
+				expect,
+			}) => {
+				const { diagnostics } = normalizeAndValidateConfig(
+					{
+						previews: {
+							images: {
+								binding: "IMAGES",
+								url_transformations: { enabled: true },
+							},
+						},
+					} as unknown as RawConfig,
+					undefined,
+					undefined,
+					{ env: undefined }
+				);
+
+				expect(diagnostics.renderErrors()).toContain(
+					'The field "previews.images.url_transformations" is not supported in previews.'
 				);
 			});
 

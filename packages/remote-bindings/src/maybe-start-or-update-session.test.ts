@@ -4,7 +4,10 @@ import {
 	pickRemoteBindings,
 } from "./maybe-start-or-update-session";
 import type { RemoteBindingsLogger } from "./logger";
-import type { RemoteProxySessionData } from "./maybe-start-or-update-session";
+import type {
+	RemoteBindingsContext,
+	RemoteProxySessionData,
+} from "./maybe-start-or-update-session";
 import type { startRemoteProxySession } from "./start-remote-proxy-session";
 import type { RemoteProxyConnectionString } from "miniflare";
 
@@ -19,6 +22,11 @@ function createTestLogger(): RemoteBindingsLogger {
 		console: vi.fn(),
 	};
 }
+
+const testAuth = async () => ({
+	accountId: "account",
+	apiToken: { apiToken: "token" },
+});
 
 function createTestSession() {
 	return {
@@ -46,6 +54,67 @@ describe("maybeStartOrUpdateRemoteProxySession", () => {
 		}
 	);
 
+	it("selects Artifacts remotely only when opted in", ({ expect }) => {
+		const defaultLocal = {
+			type: "artifacts" as const,
+			namespace: "default-local",
+		};
+		const local = {
+			type: "artifacts" as const,
+			namespace: "local",
+			remote: false,
+		};
+		const remote = {
+			type: "artifacts" as const,
+			namespace: "remote",
+			remote: true,
+		};
+		expect(
+			pickRemoteBindings({
+				DEFAULT: defaultLocal,
+				LOCAL: local,
+				REMOTE: remote,
+			})
+		).toEqual({ REMOTE: remote });
+	});
+
+	it.for([undefined, false, true])(
+		"starts a session for native Artifacts only when remote=%s is true",
+		async (remote, { expect }) => {
+			const logger = createTestLogger();
+			const startSession = vi.fn<typeof startRemoteProxySession>(async () =>
+				createTestSession()
+			);
+			const result = await maybeStartOrUpdateRemoteProxySession(
+				{
+					target: "cf",
+					env: {
+						REPOS: {
+							type: "artifacts",
+							namespace: "examples",
+							dev: { remote },
+						},
+					},
+				},
+				undefined,
+				testAuth,
+				{ cliDisplayName: "Wrangler", logger },
+				startSession
+			);
+			if (remote === true) {
+				expect(startSession).toHaveBeenCalledWith(
+					{ REPOS: { type: "artifacts", namespace: "examples", remote } },
+					expect.anything()
+				);
+			} else {
+				expect(result).toBeNull();
+				expect(startSession).not.toHaveBeenCalled();
+			}
+			// The dev tools warn about the local default; the session never does.
+			expect(logger.warn).not.toHaveBeenCalled();
+		}
+	);
+
 	it("updates an existing session when all remote bindings are removed", async ({
 		expect,
 	}) => {
@@ -68,13 +137,14 @@ describe("maybeStartOrUpdateRemoteProxySession", () => {
 					remote: true,
 				},
 			},
+			auth: testAuth,
 		};
 
 		const result = await maybeStartOrUpdateRemoteProxySession(
 			{ bindings: {} },
 			existingSession,
-			undefined,
-			{ cliDisplayName: "Test CLI", logger: createTestLogger() },
+			testAuth,
+			{ cliDisplayName: "Wrangler", logger: createTestLogger() },
 			startSession
 		);
 
@@ -90,8 +160,8 @@ describe("maybeStartOrUpdateRemoteProxySession", () => {
 		const result = await maybeStartOrUpdateRemoteProxySession(
 			{ bindings: {} },
 			undefined,
-			undefined,
-			{ cliDisplayName: "Test CLI", logger: createTestLogger() },
+			testAuth,
+			{ cliDisplayName: "Wrangler", logger: createTestLogger() },
 			startSession
 		);
 
@@ -121,7 +191,7 @@ describe("maybeStartOrUpdateRemoteProxySession", () => {
 					apiToken: { apiToken: "token" },
 				}),
 			},
-			{ cliDisplayName: "Test CLI", logger: createTestLogger() },
+			{ cliDisplayName: "Wrangler", logger: createTestLogger() },
 			startSession
 		);
 
@@ -141,7 +211,10 @@ describe("maybeStartOrUpdateRemoteProxySession", () => {
 			target: "cf" as const,
 			env: { AI: { type: "ai" as const, dev: { remote: true } } },
 		};
-		const context = { cliDisplayName: "Test CLI", logger: createTestLogger() };
+		const context: RemoteBindingsContext = {
+			cliDisplayName: "Wrangler",
+			logger: createTestLogger(),
+		};
 		const newHook = () => async () => ({
 			accountId: "account",
 			apiToken: { apiToken: "token" },
@@ -186,7 +259,10 @@ describe("maybeStartOrUpdateRemoteProxySession", () => {
 		const workerConfig = {
 			bindings: { AI: { type: "ai" as const, remote: true } },
 		};
-		const context = { cliDisplayName: "Test CLI", logger: createTestLogger() };
+		const context: RemoteBindingsContext = {
+			cliDisplayName: "Wrangler",
+			logger: createTestLogger(),
+		};
 		const hook = async () => ({
 			accountId: "account",
 			apiToken: { apiToken: "token" },

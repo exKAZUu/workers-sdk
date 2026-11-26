@@ -13,6 +13,7 @@ import {
 	CorePaths,
 	createHTTPReducers,
 	createHTTPRevivers,
+	isDevControlCall,
 	isDurableObjectStub,
 	isFetcherFetch,
 	isHeadersLike,
@@ -1146,6 +1147,8 @@ class ProxyStubHandler<T extends object> implements ProxyHandler<T> {
 			// the Node.js event loop with `Atomics.wait()`. This allows Promise.race()
 			// and timeouts to work correctly when racing against DO method calls.
 			isDurableObjectStub(targetName) ||
+			// Dev control calls can wait on Node.js (see `isDevControlCall()`)
+			isDevControlCall(targetName, key) ||
 			// We assume every call with `ReadableStream`/`Blob` arguments is async.
 			// Note that you can't consume `ReadableStream`/`Blob` synchronously: if
 			// you tried a similar trick to `SynchronousFetcher`, blocking the main

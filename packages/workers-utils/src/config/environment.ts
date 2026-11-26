@@ -1323,6 +1323,8 @@ export interface EnvironmentNonInheritable {
 		database_name?: string;
 		/** The UUID of this D1 database (not required). */
 		database_id?: string;
+		/** The jurisdiction where an automatically provisioned D1 database will be created. */
+		jurisdiction?: string;
 		/** The UUID of this D1 database for Wrangler Dev (if specified). */
 		preview_database_id?: string;
 		/** The name of the migrations table for this D1 database (defaults to 'd1_migrations'). */
@@ -1565,7 +1567,7 @@ export interface EnvironmentNonInheritable {
 		| undefined;
 
 	/**
-	 * Binding to Cloudflare Images
+	 * Binding to Cloudflare Images, and configuration for Images URL transformations
 	 *
 	 * NOTE: This field is not automatically inherited from the top level environment,
 	 * and so must be specified in every named environment.
@@ -1577,9 +1579,20 @@ export interface EnvironmentNonInheritable {
 	 */
 	images:
 		| {
-				binding: string;
+				binding?: string;
 				/** Whether the Images binding should be remote or not in local development */
 				remote?: boolean;
+				/** Controls `/cdn-cgi/image/` URL transformations for requests served by this Worker */
+				url_transformations?: {
+					/** Whether URL transformations are enabled for this Worker */
+					enabled: boolean;
+					/**
+					 * Origins that images may be fetched from, in addition to the Worker's own zone,
+					 * e.g. `"images.example.com"`, `"*.example.com"` or `"example.com/images"`.
+					 * Don't include the protocol. Use `["*"]` to allow any origin. At most 10 entries.
+					 */
+					allowed_origins?: string[];
+				};
 		  }
 		| undefined;
 
@@ -2124,7 +2137,7 @@ export type ContainerEngine =
  */
 export interface PreviewsConfig
 	extends
-		Partial<Omit<EnvironmentNonInheritable, "durable_objects">>,
+		Partial<Omit<EnvironmentNonInheritable, "durable_objects" | "images">>,
 		Partial<
 			Pick<
 				EnvironmentInheritable,
@@ -2132,4 +2145,10 @@ export interface PreviewsConfig
 			>
 		> {
 	durable_objects?: { bindings: DurableObjectBindings };
+	/** Binding to Cloudflare Images. `url_transformations` is not supported in previews. */
+	images?: {
+		binding: string;
+		/** Whether the Images binding should be remote or not in local development */
+		remote?: boolean;
+	};
 }
